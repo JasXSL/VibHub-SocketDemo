@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Demo App</title>
+	
+	<!-- jQuery is not needed, but I like to use it -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
+
+	<!--[if lt IE 9]>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
+	<![endif]-->
+
+	<script>
+
+
+		/*
+
+
+			IT BEGINS!!
+
+
+		*/
+
+		// Going to use a constant for a device ID to send to. This is from your VibHub device
+		const DEVICE = "GDHI9R2FIBOY";
+
+
+
+
+
+		// Let's define an application class
+		class App{
+
+			// This is run when we create a new app
+			constructor( name, server, devices ){
+
+				let th = this;
+				this.devices = [];				// Contains our device index used for sending PWM updates via websockets
+				this.socket = io(server);		// Open a socket connection
+				this.initialized = false;		// We'll use this to check if we can start sending updates from the sliders
+
+				// Bind events from the websocket
+				this.socket.on('connect', () => { th.initialize(name, devices); });			// Initialize whenever a connection has been established
+
+				// Other events
+				this.socket.on('dev_online', (data) => { th.onDeviceOnline(data); });
+				this.socket.on('dev_offline', (data) => { th.onDeviceOffline(data); });
+	
+				// (Advanced) Receive custom messages from a modified VibHub
+				this.socket.on('aCustom', (data) => { th.onCustomMessage(data); });
+				
+			}
+
+			// This hooks us up to start sending updates to one or more VibHub devices
+			initialize( name, devices ){
+
+				let th = this;
+				// Send our app name
+				this.setName(name)
+				// Add our device(s)
+				.then(success => {
+					return th.addDevice(devices); 
+				})
+				// All done
+				.then(() => {
+					console.log("App is up and running and all devices have been added");	
+					th.initialized = true;
+				})
+				// it bork
+				.catch(err => {
+					console.error("Something went wrong:", err);	
+				});
+
+			}
+
+			// Sends our app name to the server
+			setName( name ){
+
+				let th = this;
+				return new Promise(res => {
+					th.socket.emit('app', name, success => { res(success); });
+				});
+
+			}
+
+			// This method lets us add one or more devices. deviceID is the device ID you get from your VibHub device
+			// deviceID can be either a string or an array of strings
+			addDevice( deviceID ){
+
+				let th = this;
+				return new Promise(res => {
+
+					th.socket.emit('hookup', deviceID, devices => {
+
+						th.devices = devices;	// Update our array of devices. The index of the devices in this array is what we will use to send the updates.
+						res();
+	
+					});
+
+				});
+				
+			}
+
+			// This returns the index of a device ID, this is needed to send updates to our VibHub device
+			getDeviceIndex( deviceID ){
+
+				let pos = this.devices.indexOf(deviceID);
+				// This device has successfully been hooked up, return the index
+				if( ~pos )
+					return pos;
+				// this device has not been hooked up
+				return false;				
+
+			}
+
+			// This updates the vibration strength of the VibHub device's ports (0-255)
+			sendPWM( device, port0, port1, port2, port3 ){
+
+				let index = this.getDeviceIndex(device),		// gets the device index
+					out = 										// Build a hex string
+						this.getDeviceIndex(device).toString(16).padStart(2,'0')+
+						port0.toString(16).padStart(2,'0')+		// Value of port 0
+						port1.toString(16).padStart(2,'0')+		// Value of port 1...
+						port2.toString(16).padStart(2,'0')+
+						port3.toString(16).padStart(2,'0')
+				;
+				this.socket.emit('p', out);	// Send the hex to the VibHub device!
+
+			}
+
+
+			// Optional event bindings:
+
+			// A device connected to this app has come online or been added
+			onDeviceOnline( data ){
+
+				let id = data.shift(),
+					socket_id = data.shift();
+
+				console.log("A device called", id, "has come online");
+
+			}
+
+			// A device connected to this app has gone offline
+			onDeviceOffline( data ){
+
+				let id = data.shift(),
+					socket_id = data.shift();
+
+				console.log("A device called", id, "has gone offline");
+
+			}
+
+			// Custom message received from a modified VibHub device
+			onCustomMessage( data ){
+
+				let id = data.shift(),
+					sid = data.shift(),
+					custom = data.shift()
+				; 
+				console.log("Custom data from ", id, "was", custom);
+
+			}
+
+			// Send a custom message to a modified VibHub device (must be connected to the app)
+			sendCustomMessage( id, data ){
+				App.socket.emit("dCustom", [id, data]);
+			}
+
+
+		}
+
+
+		/*
+
+			We are now done with the class definitions
+			Let's wait for the document body to load and then start the app
+
+		*/
+
+		$(() => {
+
+
+			// Lets start the app by making a new app object with our configuration!
+			const myApp = new App("JasTestApp", "https://vibhub.io", DEVICE);
+
+			// Check the values of a range and send them whenever you drag a slider. You can do a whole lotta updates per second with wifi!
+			$("input.intensity").on('input', () => {
+
+				// Arguments to send to the sendPWM method
+				// First argument is the device ID. We're using a constant because easy
+				let out = [DEVICE];	
+
+				$("input.intensity").each(function(){
+					out.push(+$(this).val());		// add each slider from top to bottom to the argument list
+				});
+
+				// Send the actual update
+				myApp.sendPWM.apply(myApp, out);
+
+			});
+
+	});
+
+	</script>
+</head>
+
+<body>
+
+	<!-- Create the sliders you'll drag to change intensity -->
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+
+</body>
+</html>

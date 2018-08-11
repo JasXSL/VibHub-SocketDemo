@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Demo App</title>
+	
+	<!-- jQuery is not needed, but I like to use it -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
+
+	<!--[if lt IE 9]>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
+	<![endif]-->
+
+	<script>
+		class BoardTester{
+
+			// This is run when we create a new app
+			constructor( name, server, port ){
+		
+				this.appName = name;
+				this.devices = [];
+				this.socket = null;
+				this.server = server || "https://vibhub.io";
+				this.port = port || 80;
+
+			}
+		
+			initialize(){
+				
+				this.socket = io(this.server);
+				this.socket.on('dev_online', data => { this.onDeviceOnline(data); });
+				this.socket.on('dev_offline', data => { this.onDeviceOffline(data); });
+				this.socket.on('aCustom', data => { this.onCustomMessage(data); });
+				let th = this;
+				return new Promise((res, rej) => {
+					
+					th.socket.on('connect', () => { 
+						res(th.setName()); 
+					});
+					
+				}).then(() => {
+					console.log("Connection established");
+				});
+		
+			}
+		
+			// Sends our app name to the server
+			setName(){
+		
+				let th = this;
+				return new Promise(res => {
+					th.socket.emit('app', this.appName, success => { 
+						res(success); 
+					});
+				});
+		
+			}
+		
+			// This method lets us add one or more devices. deviceID is the device ID you get from your VibHub device
+			// deviceID can be either a string or an array of strings
+			addDevice( deviceID ){
+		
+				return new Promise(res => {
+		
+					this.socket.emit('hookup', deviceID, devices => {
+		
+						this.devices = devices;	// Update our array of devices. The index of the devices in this array is what we will use to send the updates.
+						res();
+		
+					});
+		
+				});
+				
+			}
+		
+			// Clears all devices
+			wipeDevices(){
+		
+				return new Promise(res => {
+		
+					this.socket.emit('hookdown', [], devices => {
+		
+						this.devices = [];	// Update our array of devices. The index of the devices in this array is what we will use to send the updates.
+						res();
+		
+					});
+		
+				});
+		
+			}
+		
+			// This returns the index of a device ID, this is needed to send updates to our VibHub device
+			getDeviceIndex( deviceID ){
+		
+				let pos = this.devices.indexOf(deviceID);
+				// This device has successfully been hooked up, return the index
+				if( ~pos )
+					return pos;
+				// this device has not been hooked up
+				return false;				
+		
+			}
+		
+			// This updates the vibration strength of the VibHub device's ports (0-255)
+			sendPWM( device, port0, port1, port2, port3 ){
+		
+				let index = this.getDeviceIndex(device),		// gets the device index
+					out = 										// Build a hex string
+						this.getDeviceIndex(device).toString(16).padStart(2,'0')+
+						port0.toString(16).padStart(2,'0')+		// Value of port 0
+						port1.toString(16).padStart(2,'0')+		// Value of port 1...
+						port2.toString(16).padStart(2,'0')+
+						port3.toString(16).padStart(2,'0')
+				;
+				this.socket.emit('p', out);	// Send the hex to the VibHub device!
+		
+			}
+		
+		
+			// Optional event bindings:
+			// A device connected to this app has come online or been added
+			onDeviceOnline( data ){
+		
+				let id = data.shift(),
+					socket_id = data.shift();
+				console.log("A device called", id, "has come online");
+		
+			}
+		
+			// A device connected to this app has gone offline
+			onDeviceOffline( data ){
+		
+				let id = data.shift(),
+					socket_id = data.shift();
+		
+				console.log("A device called", id, "has gone offline");
+		
+			}
+		
+			// Custom message received from a modified VibHub device
+			onCustomMessage( data ){
+		
+				let id = data.shift(),
+					sid = data.shift(),
+					custom = data.shift()
+				; 
+				if( !Array.isArray(custom) )
+					return;
+		
+				let task = custom.shift(),
+					val = custom.shift()
+				;
+				
+				if( task === "btn" ){
+		
+					if( !val )
+						console.log("Button pressed");
+		
+				}
+		
+			}
+		
+			// Send a custom message to a modified VibHub device (must be connected to the app)
+			sendCustomMessage( id, data ){
+				App.socket.emit("dCustom", [id, data]);
+			}
+		
+		
+		}
+	</script>
+
+	<script>
+
+		const device = new BoardTester("BoardTester", "https://vibhub.io");
+
+		
+		console.log("It begins");
+		// Going to use a constant for a device ID to send to. This is from your VibHub device
+		$(() => {
+
+			let textbox = $("#devid");
+			device.initialize().then(() => {
+
+				let sendPWM = function(){
+					let out = [textbox.val()];	
+					$("input.intensity").each(function(){
+						out.push(+$(this).val());		// add each slider from top to bottom to the argument list
+					});
+					// Send the actual update
+					device.sendPWM.apply(device, out);
+				}
+	
+				textbox.on('change', async function(){
+					$(this).prop('disabled', true);
+					//await device.wipeDevices();
+					await device.addDevice($(this).val());
+					sendPWM();
+					$(this).prop('disabled', false);
+				}).prop('disabled', false);
+	
+				// Check the values of a range and send them whenever you drag a slider. You can do a whole lotta updates per second with wifi!
+				$("input.intensity").on('input', sendPWM);
+
+			}).catch(console.error);
+
+			
+
+	});
+
+	</script>
+</head>
+
+<body>
+
+	<input type="text" placeholder="Device ID" id="devid" disabled /><br />
+	<p id="debug"></p>
+	<!-- Create the sliders you'll drag to change intensity -->
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+
+</body>
+</html>
