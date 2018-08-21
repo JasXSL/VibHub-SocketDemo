@@ -188,6 +188,7 @@ class VhSocket{
 class VhProgram{
 
 	// Ports is an array of ports you want to trigger, numbered from 0 to 3
+	// Ports can also be a single port if it's an int
 	constructor( ports, repeats ){
 
 		this.port = 0;
@@ -201,8 +202,13 @@ class VhProgram{
 	// Accepts an array of ports to set
 	setPorts( ports ){
 
-		if( !Array.isArray(ports) )
+		if( !Array.isArray(ports) ){
+
+			if( !isNaN(ports) )
+				this.port = +ports;
 			return;
+
+		}
 
 		this.port = 0;
 		for( let port of ports ){
@@ -216,10 +222,11 @@ class VhProgram{
 
 	}
 
-	// Adds a VhStage
-	addStage( stage ){
+	// Adds one or more VhStages
+	addStage(){
 
-		this.stages.push(stage);
+		for(let stage of arguments)
+			this.stages.push(stage);
 
 	}
 
@@ -263,24 +270,42 @@ class VhStage{
 		if( typeof settings !== "object" )
 			settings = {};
 		this.intensity = settings.intensity || 0;
-		this.duration = settings.duration || 0;
+		this.duration = settings.duration;
 		this.easing = settings.easing || "Linear.None";
 		this.repeats = settings.repeats || 0;
 		this.yoyo = !!settings.yoyo;
 
 	}
 
+	exportIntOrRand( v ){
+		
+		if( typeof v === "object" && typeof v.export === "function" )
+			return v.export();
+
+		if( !isNaN(v) )
+			return Math.floor(v);
+			
+		return 0;
+
+	}
+
 	export(){
 
 		let out = {};
-		if( this.intensity > 0 )
+		if( typeof this.intensity === "boolean" )
 			out.i = this.intensity;
-		if( this.duration > 0 )
-			out.d = Math.floor(this.duration);
+		else if( this.intensity )
+			out.i = this.exportIntOrRand(this.intensity);
+
+		if( this.repeats )
+			out.r = this.exportIntOrRand(this.repeats);
+
+		if( this.duration )
+			out.d = this.exportIntOrRand(this.duration);
+
 		if( typeof this.easing === "string" && this.easing !== "Linear.None" )
 			out.e = this.easing;
-		if( this.repeats > 0 )
-			out.r = this.repeats;
+		
 		if( this.yoyo )
 			out.y = this.yoyo;
 
@@ -290,7 +315,38 @@ class VhStage{
 
 }
 
+class VhRandObject{
+
+	constructor( settings ){
+		
+		if( typeof settings !== "object" )
+			settings = {};
+
+		this.min = isNaN(settings.min) ? null : Math.floor(settings.min);
+		this.max = isNaN(settings.max) ? null : Math.floor(settings.max);
+		this.offset = isNaN(settings.offset) ? null : Math.floor(settings.offset);
+		this.multi = isNaN(settings.multi) ? null : Math.floor(settings.multi);
+
+	}
+
+	export(){
+
+		let out = {};
+		if( this.min !== null )
+			out.min = this.min;
+		if( this.max !== null )
+			out.max = this.max;
+		if( this.offset !== null )
+			out.offset =  this.offset;
+		if( this.multi !== null )
+			out.multi = this.multi;
+		return out;
+
+	}
+
+}
+
 
 
 export default VhSocket;
-export {VhProgram, VhStage};
+export {VhProgram, VhStage, VhRandObject};

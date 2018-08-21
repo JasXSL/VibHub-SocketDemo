@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Demo App</title>
+
+	<!--[if lt IE 9]>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
+	<![endif]-->
+	<script src='https://vibhub.io/socket.io/socket.io.js'></script>
+	<script type="module">
+
+		// Get the library, you can use the official CDN or download your own library
+		import {default as VhSocket, VhProgram, VhStage, VhRandObject} from 'https://vibhub.io/cdn/vh-socket.js';
+		
+		// Configure the connection
+		const App = new VhSocket( 
+			"My Demo App", 			// Name of my app
+			"https://vibhub.io", 	// Relay server. You'll likely use https://vibhub.io unless you self host.  
+			80						// Relay server port
+		);
+
+		// Begin once the DOM is loaded
+		window.onload = async () => {
+
+			// Get the DOM elements
+			const dom_deviceid = document.getElementById("devid");
+			const dom_buttons = document.querySelectorAll("input.program");
+
+			// Wait for app to connect and send the app name to the server
+			await App.begin();
+
+			console.log("Connection established");
+
+			// Enable the device ID input
+			dom_deviceid.disabled = false;
+
+
+			// Bind events
+
+			// Function to send a program when a button is clicked
+			const sendProgram = function(){
+				
+				let id = this.value; // Button value
+				let program = new VhProgram(1, 0);	// Send	to the first port, 0 repeats
+
+				// Build program to tween to off from the current intensity
+				if( id === "Tween to OFF" ){
+					program.addStage(new VhStage({
+						intensity : 0,		// 0 intensity
+						duration : 1000		// 1000 ms (1 second)
+					}));
+				}
+
+				// Tween to MAX intensity from the current intensity
+				else if( id === "Tween to MAX" ){
+					program.addStage(new VhStage({
+						intensity : 255,	// 255 (max) intensity
+						duration : 1000		// 1000 ms (1 second)
+					}));
+				}
+
+				// Tween from the current intensity to a random intensity over 1 second
+				else if( id === "Tween to Random" ){
+					program.addStage(new VhStage({
+						intensity : new VhRandObject({
+							min : 0,
+							max : 255
+						}),
+						duration : 1000		// 1000 ms (1 second)
+					}));
+				}
+
+				// Create 1 to 3 pulses going up and down in a sinusoidal fashion
+				// These are supported: https://sole.github.io/tween.js/examples/03_graphs.html
+				else if( id === "1-3 Pulses" ){
+					program.addStage(new VhStage({
+						intensity : 128,
+						duration : 500,		// 500 ms (0.5 second). 1 sec for a full pulse due to yoyo
+						yoyo : true,
+						easing : "Sinusoidal.InOut",
+						repeats : new VhRandObject({
+							min : 0,	// Min 0
+							max : 2,	// Max 2
+							multi : 2,	// Multiplier against the above value. Here repeats will be 0/2/4
+							offset : 1,	// Offset to add to the above number. Because we need an odd number to yoyo back and forth
+							// The random number here will be either 1/3/5, this is because a yoyo going back consumes 1 repeat
+						})
+					}));
+				}
+
+				// No program like this
+				else
+					return;
+
+				// Send the program
+				App.sendProgram( 
+					dom_deviceid.value,			// Device ID
+					program
+				);
+
+			};
+
+			dom_deviceid.onchange = async function(){
+
+				// Wipe device
+				await App.wipeDevices();
+				// Add the new device
+				await App.addDevice( this.value );
+
+			};
+
+
+			// Bind range change
+			dom_buttons.forEach(el => {
+				el.onclick = sendProgram;
+			});
+
+		};
+
+	</script>
+</head>
+
+<body>
+
+	<input type="text" placeholder="Device ID" id="devid" disabled /><br />
+	<p id="debug"></p>
+	<!-- Create the sliders you'll drag to change intensity -->
+	<input type="button" value="Tween to OFF" class="program" />
+	<input type="button" value="Tween to MAX" class="program" />
+	<input type="button" value="Tween to Random" class="program" />
+	<input type="button" value="1-3 Pulses" class="program" />
+
+</body>
+</html>
