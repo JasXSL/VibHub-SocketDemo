@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Demo App</title>
+
+	<!--[if lt IE 9]>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
+	<![endif]-->
+	<script src='https://vibhub.io/socket.io/socket.io.js'></script>
+	<script type="module">
+
+		// Get the library, you can use the official CDN or download your own library, or just write your own
+		import VH from 'https://vibhub.io/cdn/vh-socket.js';
+		
+		// Configure the connection
+		const App = new VH( 
+			"My Demo App", 			// Name of my app
+			"https://vibhub.io", 	// Relay server. You'll likely use https://vibhub.io unless you self host.  
+			80						// Relay server port
+		);
+
+		// Begin once the DOM is loaded
+		window.onload = async () => {
+
+			// Get the DOM elements
+			const dom_deviceid = document.getElementById("devid");
+			const dom_inputs = document.querySelectorAll("input.intensity");
+
+			// Wait for app to connect and send the app name to the server
+			await App.begin();
+
+			console.log("Connection established");
+
+			// Enable the device ID input
+			dom_deviceid.disabled = false;
+
+
+			// Bind events
+
+			// Function to send the current sliders
+			const sendIntensities = function(){
+				
+				// First argument is the device ID
+				let out = [
+					dom_deviceid.value
+				];
+				// Remaining arguments are the intensities of the 4 ports
+				dom_inputs.forEach(el => {
+					out.push(el.value);
+				});
+				// Send to the device
+				App.sendPWM.apply(App, out);
+
+			};
+
+			dom_deviceid.onchange = async function(){
+
+				// Wipe device
+				await App.wipeDevices();
+				// Add the new device
+				await App.addDevice( this.value );
+				// Send the current values of the sliders
+				sendIntensities();
+
+			};
+
+			
+
+			// Bind range change
+			dom_inputs.forEach(el => {
+				el.oninput = sendIntensities;
+			});
+
+		};
+
+	</script>
+</head>
+
+<body>
+
+	<input type="text" placeholder="Device ID" id="devid" disabled /><br />
+	<p id="debug"></p>
+	<!-- Create the sliders you'll drag to change intensity -->
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+
+</body>
+</html>
