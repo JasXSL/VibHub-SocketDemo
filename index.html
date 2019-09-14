@@ -1,4 +1,12 @@
 <!doctype html>
+<!-- 
+	
+	This is a demo browser app that lets you set your device intensity directly.
+	See App.js for the code.
+	If you want to use the console for debugging, entry point is window.App; 
+
+-->
+
 <html lang="en">
 <head>
 	<meta charset="utf-8">
@@ -8,71 +16,130 @@
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
 	<![endif]-->
 	<script src='https://vibhub.io/socket.io/socket.io.js'></script>
+
+	<!-- 
+
+		The script is put inline here so it can run locally
+
+	 -->
 	<script type="module">
 
-		// Get the library, you can use the official CDN or download your own library, or just write your own
-		import VH from 'https://vibhub.io/cdn/vh-socket.js';
-		
-		// Configure the connection
-		const App = new VH( 
-			"My Demo App", 			// Name of my app
-			"https://vibhub.io", 	// Relay server. You'll likely use https://vibhub.io unless you self host.  
-			80						// Relay server port
-		);
+		// Import the vibhub JS library
+		import {default as VH, VhProgram as Program, VhStage as Stage} from 'https://vibhub.io/cdn/vh-socket.js';
 
-		// Begin once the DOM is loaded
-		window.onload = async () => {
-
-			// Get the DOM elements
-			const dom_deviceid = document.getElementById("devid");
-			const dom_inputs = document.querySelectorAll("input.intensity");
-
-			// Wait for app to connect and send the app name to the server
-			await App.begin();
-
-			console.log("Connection established");
-
-			// Enable the device ID input
-			dom_deviceid.disabled = false;
-
-
-			// Bind events
-
-			// Function to send the current sliders
-			const sendIntensities = function(){
-				
-				// First argument is the device ID
-				let out = [
-					dom_deviceid.value
-				];
-				// Remaining arguments are the intensities of the 4 ports
-				dom_inputs.forEach(el => {
-					out.push(el.value);
-				});
-				// Send to the device
-				App.sendPWM.apply(App, out);
-
-			};
-
-			dom_deviceid.onchange = async function(){
-
-				// Wipe device
-				await App.wipeDevices();
-				// Add the new device
-				await App.addDevice( this.value );
-				// Send the current values of the sliders
-				sendIntensities();
-
-			};
-
+		// Add an extending class that handles our custom logic
+		class App extends VH{
 			
+			constructor(...args){
+				super(...args);
 
-			// Bind range change
-			dom_inputs.forEach(el => {
-				el.oninput = sendIntensities;
-			});
+				// Grab some stuff from the DOM
+				this.devidField = document.getElementById('devid');
+				this.intensityFields = document.querySelectorAll('input.intensity');
+				this.pulseButton = document.querySelector('input.sendPulse');
+				this.controls = document.getElementById('controls');
+				this.controls.style = 'display:none';
+
+				// Device object from the app
+				this.device = null;
+
+				// device ID changed
+				this.devidField.onchange = () => this.onDeviceIdChange();
+				this.intensityFields.forEach((el, idx) => {
+					el.oninput = () => this.onSliderChange(el, idx);
+				});
+				this.pulseButton.onclick = () => this.onProgramButtonPressed();
+
+			}
+
+			// A custom connect method so we can use async
+			async connect(){
+
+				// Setup the connection, send the name etc
+				await this.begin();
+				
+				// Now we're connected, enable the input
+				this.devidField.disabled = false;
+
+
+			}
+
+			// A device connected to this app has come online or been added
+			onDeviceOnline( id, socket_id ){
+
+				console.log("A device called", id, "has come online, id: ", socket_id);
+				// Update the PWM values to our currently set values
+				this.device.sendPWM();
+				this.controls.style = '';
+
+			}
+
+			// A device connected to this app has gone offline
+			onDeviceOffline( id, socket_id ){
+
+				console.log("A device called", id, "has gone offline, id:", socket_id);
+				this.controls.style = 'display:none';
+
+			}
+
+			// Raised 60 times per second
+			onTick(){}
+		
+
+			// DOM Events
+			async onDeviceIdChange(){
+
+				// Wipe all devices since we only want the one device in our app
+				await this.wipeDevices();
+
+				// Add the new device
+				this.device = await this.addDevice(this.devidField.value);
+
+				// Keep in mind the device has not come online here.
+				// We now have a device object, but it's not online yet.
+				// We can track that in the onDeviceOnline method
+
+			}
+		
+			onSliderChange( element, idx ){
+
+				if( !this.device )
+					return;
+
+				// This relies on the auto ticker, limiting to 60 updates per second.
+				// You can call set as much as you like, but it only updates 60 times per second.
+				// If you want to make intensity ramp up/down or pulse etc, you should use a program instead.
+				this.device.set( parseInt(element.value), idx );			
+
+			}
+
+			onProgramButtonPressed(){
+
+				console.log("Sending program");
+				const program = new Program();
+				program.addStage(new Stage({
+					intensity:255, 
+					duration:1000,
+					yoyo : 1,
+					repeats : 1,
+				}));
+				this.device.sendProgram(program);
+
+			}
+		
+		}
+
+		
+
+		// Begin on window load
+		window.onload = () => {
+
+			console.log("Entry point is window.App");
+			window.App = new App( "My Test App" );
+			window.App.connect();
 
 		};
+
 
 	</script>
 </head>
@@ -81,11 +148,16 @@
 
 	<input type="text" placeholder="Device ID" id="devid" disabled /><br />
 	<p id="debug"></p>
-	<!-- Create the sliders you'll drag to change intensity -->
-	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
-	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
-	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
-	<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+	<div id="controls">
+		<!-- Create the sliders you'll drag to change intensity -->
+		<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+		<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+		<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+		<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
+
+		<br />
+		<input type="button" class="sendPulse" value="Send Pulse" /><br />
+	</div>
 
 </body>
 </html>
