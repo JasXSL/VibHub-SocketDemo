@@ -65,19 +65,19 @@
 			}
 
 			// A device connected to this app has come online or been added
-			onDeviceOnline( id, socket_id ){
+			onDeviceOnline( device ){
 
-				console.log("A device called", id, "has come online, id: ", socket_id);
 				// Update the PWM values to our currently set values
+				console.log("The device", device, "has come online");
 				this.device.sendPWM();
 				this.controls.style = '';
 
 			}
 
 			// A device connected to this app has gone offline
-			onDeviceOffline( id, socket_id ){
+			onDeviceOffline( device ){
 
-				console.log("A device called", id, "has gone offline, id:", socket_id);
+				console.log("Device", device, "has gone offline");
 				this.controls.style = 'display:none';
 
 			}
