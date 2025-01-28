@@ -1,6 +1,5 @@
 <!doctype html>
 <!-- 
-	
 	This is a demo browser app that lets you set your device intensity directly.
 	See App.js for the code.
 	If you want to use the console for debugging, entry point is window.App; 
@@ -38,7 +37,9 @@
 				this.intensityFields = document.querySelectorAll('input.intensity');
 				this.pulseButton = document.querySelector('input.sendPulse');
 				this.controls = document.getElementById('controls');
+				this.getBatteryButton = document.querySelector('input.getBattery');
 				this.controls.style = 'display:none';
+				this.batteryInfo = document.querySelector('.batteryInfo');
 
 				// Device object from the app
 				this.device = null;
@@ -49,6 +50,7 @@
 					el.oninput = () => this.onSliderChange(el, idx);
 				});
 				this.pulseButton.onclick = () => this.onProgramButtonPressed();
+				this.getBatteryButton.onclick = () => this.onGetBatteryButtonPressed();
 
 			}
 
@@ -92,12 +94,19 @@
 				// Wipe all devices since we only want the one device in our app
 				await this.wipeDevices();
 
+				console.log("Adding new device");
 				// Add the new device
 				this.device = await this.addDevice(this.devidField.value);
 
 				// Keep in mind the device has not come online here.
 				// We now have a device object, but it's not online yet.
 				// We can track that in the onDeviceOnline method
+
+			}
+
+			onDeviceBattery( device ){
+
+				this.batteryInfo.innerText = 'Low battery status: ' + (device.batteryLow ? 'YES' : 'NO')+' | Battery raw mV: ' + device.batteryMillivolts + ' | Recalculated assuming 1:1 divider: ' + (device.batteryMillivolts*2/1000)+'V';
 
 			}
 		
@@ -116,7 +125,7 @@
 			onProgramButtonPressed(){
 
 				console.log("Sending program");
-				const program = new Program();
+				const program = new Program([0,1,2,3]);
 				program.addStage(new Stage({
 					intensity:255, 
 					duration:1000,
@@ -124,6 +133,13 @@
 					repeats : 1,
 				}));
 				this.device.sendProgram(program);
+
+			}
+
+			onGetBatteryButtonPressed(){
+
+				this.batteryInfo.innerText = "Getting battery...";
+				this.device.getBattery();
 
 			}
 		
@@ -156,7 +172,12 @@
 		<input type="range" class="intensity" min=0 max=255 step=1 value="0" /><br />
 
 		<br />
-		<input type="button" class="sendPulse" value="Send Pulse" /><br />
+		<input type="button" class="sendPulse" value="Send Pulse" />
+		<input type="button" class="getBattery" value="Get Battery" />
+
+		<div class="batteryInfo"></div>
+		
+		<br />
 	</div>
 
 </body>
