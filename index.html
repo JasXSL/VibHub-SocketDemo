@@ -24,7 +24,7 @@
 	<script type="module">
 
 		// Import the vibhub JS library
-		import {default as VH, VhProgram as Program, VhStage as Stage} from 'https://vibhub.io/cdn/vh-socket.js';
+		import {default as VH, VhProgram as Program, VhStage as Stage} from 'https://vibhub.io/cdn/vh-socket-1.0.0.js';
 
 		// Add an extending class that handles our custom logic
 		class App extends VH{
@@ -106,9 +106,9 @@
 
 			}
 
-			onDeviceBattery( device ){
+			onDeviceBoardStatus( device ){
 
-				this.batteryInfo.innerText = 'Low battery status: ' + (device.batteryLow ? 'YES' : 'NO')+' | Battery mV: ' + device.batteryMillivolts + ' | Battery max mV: ' + (device.batteryMaxMillivolts);
+				this.batteryInfo.innerText = 'Low battery status: ' + (device.batteryLow ? 'YES' : 'NO')+' | Battery mV: ' + device.batteryMillivolts + ' | Battery max mV: ' + (device.batteryMaxMillivolts)+ ' | Temperature: '+device.temperatureC;
 
 			}
 
@@ -151,7 +151,7 @@
 			onGetBatteryButtonPressed(){
 
 				this.batteryInfo.innerText = "Getting battery...";
-				this.device.getBattery();
+				this.device.getBoardStatus();
 
 			}
 		
@@ -185,7 +185,7 @@
 
 		<br />
 		<input type="button" class="sendPulse" value="Send Pulse" />
-		<input type="button" class="getBattery" value="Get Battery" />
+		<input type="button" class="getBattery" value="Get Status" />
 		<label>High Res <input type="checkbox" class="highres" /></label>
 
 		<div class="batteryInfo"></div>
