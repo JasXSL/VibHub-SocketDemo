@@ -4,12 +4,73 @@
 	See App.js for the code.
 	If you want to use the console for debugging, entry point is window.App; 
 
+	Stuff needed for a unit test:
+	- Send program
+	- Send direct data
+	- Get battery reading
+	- Get temperature reading
+	
+
 -->
 
 <html lang="en">
 <head>
 	<meta charset="utf-8">
 	<title>Demo App</title>
+	<style type="text/css">
+
+		html, body {
+			height: 100%;
+			margin: 0;
+			padding: 0;
+			font-family: Verdana, Geneva, Tahoma, sans-serif;
+			font-size:1em;
+		}
+		input:not([type=range]){
+			font-size:1.5em;
+			padding:0.5em;
+		}
+		input[type=range]{
+			width:50%;
+			margin:0 1vmax;
+		}
+		table{
+			width:100%;
+		}
+		body{
+			min-height: 100vh;
+			background:#EDE;
+			display:flex;
+			justify-content: center;
+			align-items: center;
+		}
+		.strong{
+			font-weight: bold;
+		}
+		#wrap{
+			position:relative;
+			background:rgba(255,255,255,.75);
+			border-radius: 1vmax;
+			padding:1vmax;
+			box-shadow: 0.5vmax 0.5vmax 1vmax rgba(0,0,0,.25);
+			border: 3px double #FFF;
+			box-sizing: border-box;
+			width: auto;
+			max-width: 95vw;
+		}
+		label{
+			background:#FFF;
+			border-radius: 0.5vmax;
+			margin:0.2vmax 0;
+			padding:1vmax;
+			
+		}
+		*.flex{
+			display:flex;
+			align-items: center;
+		}
+
+	</style>
 
 	<!--[if lt IE 9]>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
@@ -108,7 +169,51 @@
 
 			onDeviceBoardStatus( device ){
 
-				this.batteryInfo.innerText = 'Low battery status: ' + (device.batteryLow ? 'YES' : 'NO')+' | Battery mV: ' + device.batteryMillivolts + ' | Battery max mV: ' + (device.batteryMaxMillivolts)+ ' | Temperature: '+device.temperatureC;
+				this.getBatteryButton.value = "Update Status"
+
+				//this.batteryInfo.innerText = 'Low battery status: ' + (device.batteryLow ? 'YES' : 'NO')+' | Battery mV: ' + device.batteryMillivolts + ' | Battery max mV: ' + (device.batteryMaxMillivolts)+ ' | Temperature: '+device.temperatureC;
+				document.getElementById('hwversion').innerText = device.hwversion;
+				document.getElementById('fwversion').innerText = device.version;
+				document.getElementById('temperature').innerText = device.temperatureC;
+				document.getElementById('numports').innerText = device.numPorts;
+				document.getElementById('battery').innerText = device.batteryMillivolts;
+				document.getElementById('batteryMax').innerText = device.batteryMaxMillivolts;
+				document.getElementById('batteryStatus').innerText = device.batteryLow ? 'LOW' : 'OK';
+				const caps = device.capabilities || {};
+				document.getElementById('hdBits').innerText = parseInt(caps.h) || '???';
+
+				let capText = document.createElement('ul');
+				
+				const addLi = text => {
+					const li = document.createElement('li');
+					li.innerText = text;
+					capText.append(li);
+				}
+
+				if( caps.app )
+					addLi('App connect detection.');
+				if( caps.p )
+					addLi('PWM All.');
+				if( caps.ps )
+					addLi('PWM Specific.');
+				if( caps.vib )
+					addLi('Program support.');
+				if( caps.app_offline )
+					addLi('App disconnect detection.');
+				if( caps.dCustom )
+					addLi('Can receive custom data from app.');
+				if( caps.aCustom )
+					addLi('Can send custom data to app.');
+				if( caps.sb )
+					addLi('Board status updates.');
+				if( caps.temp )
+					addLi('Temperature sensor.');
+				if( caps.bat )
+					addLi('Battery sensor.');
+
+				console.log(capText);
+
+				document.getElementById('capabilities').replaceChildren(capText);
 
 			}
 
@@ -150,7 +255,7 @@
 
 			onGetBatteryButtonPressed(){
 
-				this.batteryInfo.innerText = "Getting battery...";
+				this.getBatteryButton.value = "Refreshing Status...";
 				this.device.getBoardStatus();
 
 			}
@@ -164,7 +269,18 @@
 
 			console.log("Entry point is App");
 			window.App = new App( "My Test App" );
-			window.App.connect();
+			const app = window.App;
+			app.connect().then(() => {
+				if( window.location.hash.length > 10 ){
+
+					let id = window.location.hash;
+					if( id[0] == '#' )
+						id = id.slice(1);
+					app.devidField.value = id;
+					return app.onDeviceIdChange();
+
+				}
+			});
 
 		};
 
@@ -173,25 +289,46 @@
 </head>
 
 <body>
-
-	<input type="text" placeholder="Device ID" id="devid" disabled /><br />
-	<p id="debug"></p>
-	<div id="controls">
-		<!-- Create the sliders you'll drag to change intensity -->
-		<input type="range" class="intensity" min=0 max=1 step=0.01 value="0" /><br />
-		<input type="range" class="intensity" min=0 max=1 step=0.01 value="0" /><br />
-		<input type="range" class="intensity" min=0 max=1 step=0.01 value="0" /><br />
-		<input type="range" class="intensity" min=0 max=1 step=0.01 value="0" /><br />
-
-		<br />
-		<input type="button" class="sendPulse" value="Send Pulse" />
-		<input type="button" class="getBattery" value="Get Status" />
-		<label>High Res <input type="checkbox" class="highres" /></label>
-
-		<div class="batteryInfo"></div>
+	<div id="wrap">
+		<h2>Device ID</h2>
+		<div class="flex">
+			<input type="text" placeholder="Device ID" id="devid" disabled />
+			<label>High Res <input type="checkbox" class="highres" /></label><br />
+		</div>
+		<p id="debug"></p>
 		
-		<br />
-	</div>
+		<div id="controls">
 
+			<h2>Controls</h2>
+			
+			<!-- Create the sliders you'll drag to change intensity -->
+			<label class="port flex">Port 0 <input type="range" class="intensity" min=0 max=1 step=0.01 value="0" /></label>
+			<label class="port flex">Port 1 <input type="range" class="intensity" min=0 max=1 step=0.01 value="0" /></label>
+			<label class="port flex">Port 2 <input type="range" class="intensity" min=0 max=1 step=0.01 value="0" /></label>
+			<label class="port flex">Port 3 <input type="range" class="intensity" min=0 max=1 step=0.01 value="0" /></label>
+
+			<br />
+			<input type="button" class="sendPulse" value="Send Pulse" />
+			<input type="button" class="getBattery" value="Update Status" />
+			
+
+			<div class="batteryInfo">
+				<table>
+					<tr><th>Property</th><th>Value</th></th></tr>
+					<tr><td>Hardware Version</td><td id="hwversion" class="strong"></td></tr>
+					<tr><td>Firmware Version</td><td id="fwversion" class="strong"></td></tr>
+					<tr><td>Temperature</td><td id="temperature"></td></tr>
+					<tr><td>Num Ports</td><td id="numports"></td></tr>
+					<tr><td>Battery mV</td><td id="battery"></td></tr>
+					<tr><td>Battery Max mV</td><td id="batteryMax"></td></tr>
+					<tr><td>Battery Status</td><td id="batteryStatus"></td></tr>
+					<tr><td>Capabilities</td><td id="capabilities"></td>
+					<tr><td>HD Bits Support</td><td id="hdBits"></td></tr>
+				</table>
+			</div>
+			
+			<br />
+		</div>
+	</div>
 </body>
 </html>
